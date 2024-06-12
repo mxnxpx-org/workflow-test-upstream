@@ -1,4 +1,4 @@
-# Reusable Workflow that deploys environments
+# Reusable Workflow that deploys an environment
 name: Deploy Environment
 on:
   workflow_call:
