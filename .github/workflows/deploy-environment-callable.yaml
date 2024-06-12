@@ -261,8 +261,8 @@ jobs:
       ( needs.deploy_swf.result == 'success' || needs.deploy_swf.result == 'skipped' ) &&
       ( needs.check_changes.outputs.base_bundle_changes == 'true' )
     environment: ${{ inputs.environment }}
-    runs-on:
-      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
+    runs-on: ubuntu-latest
+#      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
     container:
       image: 'ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:latest'
     steps:
@@ -340,8 +340,8 @@ jobs:
       ( needs.build_and_publish_runner_image.result == 'success' || needs.build_and_publish_runner_image.result == 'skipped' ) &&
       ( needs.check_changes.outputs.swf_bundle_changes == 'true' )
     environment: ${{ inputs.environment }}
-    runs-on:
-      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
+    runs-on: ubuntu-latest
+#      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
     container:
       image: 'ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:latest'
     steps:
@@ -410,8 +410,8 @@ jobs:
       ( needs.deploy_swf_bundle.result == 'success' || needs.deploy_swf_bundle.result == 'skipped') &&
       ( needs.check_changes.outputs.lfai_bundle_changes == 'true' )
     environment: ${{ inputs.environment }}
-    runs-on:
-      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
+    runs-on: ubuntu-latest
+#      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
     container:
       image: 'ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:latest'
     steps:
