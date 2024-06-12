@@ -41,7 +41,7 @@ runs:
         target: ${{ inputs.target }}
 
     - name: Configure AWS Credentials
-      cmd: |
+      run: |
        echo "[*] Configure AWS Credentials"
        echo "inputs.region: ${{ inputs.region }}"
        echo "inputs.role-to-assume: ${{ inputs.role-to-assume }}"
