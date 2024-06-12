@@ -319,9 +319,9 @@ jobs:
 #          UDS_GOOGLE_IDP_CLIENTSECRET: ${{ secrets.GOOGLE_IDP_CLIENTSECRET }}
 #          ENVIRONMENT: ${{ inputs.environment }}
 
-      - name: Debug Output
-        if: ${{ always() }}
-        uses: ./.github/actions/cluster-debug
+#      - name: Debug Output
+#        if: ${{ always() }}
+#        uses: ./.github/actions/cluster-debug
 
       - name: Save logs
         if: always()
@@ -389,9 +389,9 @@ jobs:
 #          UDS_DOMAIN: ${{ vars.UDS_DOMAIN }}
 #          ENVIRONMENT: ${{ inputs.environment }}
 
-      - name: Debug Output
-        if: ${{ always() }}
-        uses: ./.github/actions/cluster-debug
+#      - name: Debug Output
+#        if: ${{ always() }}
+#        uses: ./.github/actions/cluster-debug
 
       - name: Save logs
         if: always()
@@ -403,10 +403,12 @@ jobs:
     needs:
       - check_changes
       - build_and_publish_runner_image
+      - deploy_base_bundle
       - deploy_swf_bundle
     if: |
       ( !cancelled() ) &&
       ( needs.build_and_publish_runner_image.result == 'success' || needs.build_and_publish_runner_image.result == 'skipped' ) &&
+      ( needs.deploy_base_bundle.result == 'success' || needs.deploy_base_bundle.result == 'skipped') &&
       ( needs.deploy_swf_bundle.result == 'success' || needs.deploy_swf_bundle.result == 'skipped') &&
       ( needs.check_changes.outputs.lfai_bundle_changes == 'true' )
     environment: ${{ inputs.environment }}
@@ -461,9 +463,9 @@ jobs:
 #          UDS_HOSTED_DOMAIN: ${{ vars.UDS_DOMAIN }}
 #          ENVIRONMENT: ${{ inputs.environment }}
 
-      - name: Debug Output
-        if: ${{ always() }}
-        uses: ./.github/actions/cluster-debug
+#      - name: Debug Output
+#        if: ${{ always() }}
+#        uses: ./.github/actions/cluster-debug
 
       - name: Save logs
         if: always()
