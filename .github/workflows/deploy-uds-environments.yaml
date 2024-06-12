@@ -1,0 +1,21 @@
+# This workflow deploys environments based on merge to default branch
+name: Deploy UDS Environments
+on:
+  push:
+    branches:
+      - main
+      - prod
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  deploy:
+    name: Deploy UDS Environment
+    uses: ./.github/workflows/deploy-environment-callable.yaml
+    with:
+      environment: ${{ github.repository == 'mxnxpx-org/workflow-test-upstream' && 'btb' || github.repository == 'MxNxPx/workflow-test-fork' && 'prod' }}
+#      environment: ${{ github.repository == 'defenseunicorns/uds-infrastructure' && 'btb' || github.repository == 'defenseunicorns/uds-infrastructure-prod' && 'prod' }}
+    secrets: inherit # Inherits all secrets from the parent workflow.

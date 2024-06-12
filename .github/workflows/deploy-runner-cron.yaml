@@ -1,0 +1,38 @@
+name: Deploy Self-hosted Runner
+on:
+  schedule:
+    - cron: '0 0 * * 1' # every Monday at midnight
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  deploy_runner:
+    environment: ${{ github.repository == 'mxnxpx-org/workflow-test-upstream' && 'btb' || github.repository == 'MxNxPx/workflow-test-fork' && 'prod' }}
+#    environment: ${{ github.repository == 'defenseunicorns/uds-infrastructure' && 'btb' || github.repository == 'defenseunicorns/uds-infrastructure-prod' && 'prod' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          environment: ${{ github.repository == 'mxnxpx-org/workflow-test-upstream' && 'btb' || github.repository == 'MxNxPx/workflow-test-fork' && 'prod' }}
+#          environment: ${{ github.repository == 'defenseunicorns/uds-infrastructure' && 'btb' || github.repository == 'defenseunicorns/uds-infrastructure-prod' && 'prod' }}
+          target: runner
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#        env:
+#          TF_VAR_github_org_url: ${{ vars.ARC_RUNNER_GITHUB_APP_ORG_URL }}
+#          TF_VAR_github_app_id: ${{ vars.ARC_RUNNER_GITHUB_APP_APP_ID }}
+#          TF_VAR_github_app_installation_id: ${{ vars.ARC_RUNNER_GITHUB_APP_INSTALLATION_ID }}
+#          TF_VAR_github_app_private_key: ${{ secrets.ARC_RUNNER_GITHUB_APP_PRIVATE_KEY }}
+#          TF_VAR_github_runner_group: ${{ vars.ARC_RUNNER_RUNNER_GROUP }}

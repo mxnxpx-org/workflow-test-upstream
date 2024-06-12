@@ -1,0 +1,36 @@
+name: build-and-publish-runner-image
+description: "Build and publish runner image."
+
+inputs:
+  version:
+    description: "Version to use in tagging the image."
+    required: true
+  gh_user:
+    description: "User for ghcr login."
+    required: true
+  gh_password:
+    description: "Password for ghcr login."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+      with:
+        registry: ghcr.io
+        username: 'dummy'
+        password: ${{ inputs.gh_password }}
+        logout: false
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@0d103c3126aa41d772a8362f6aa67afac040f80c # v3.1.0
+
+    - name: Build and Publish image
+      shell: bash
+      working-directory: './.github/actions/build-and-publish-runner-image/'
+      run: |
+        echo "[*] Build and Publish image"
+        echo "version: ${{ inputs.version }}"
+#        docker buildx build --platform amd64 -t ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:${{ inputs.version }} -t ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:latest --push .
+

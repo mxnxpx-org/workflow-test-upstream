@@ -1,0 +1,114 @@
+name: Automated PR to fork
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs at the top of every hour
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  sync:
+    if: github.repository == 'MxNxPx/workflow-test-fork'
+    runs-on: ubuntu-latest
+    environment: pr-cron
+    steps:
+      - name: Generate GitHub token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - uses: actions/github-script@v7
+        id: github-script
+        with:
+          github-token: ${{ steps.generate-token.outputs.token }}
+          script: |
+            const org = context.repo.owner
+            const base_repo = "workflow-test-upstream";
+            const base_branch = "main";
+            const fork_repo = context.repo.repo;
+            const fork_branch = "prod";
+            const pr_title = `Update ${fork_repo} with changes from ${base_repo}`;
+
+            function log(message) {
+              core.summary.addRaw(message).addEOL();
+              console.log(message);
+            }
+
+            // This should work, but apparently the basehead syntax is broken in this API. This syntax works on the GitHub web UI.
+            // await github.rest.repos.compareCommitsWithBasehead({
+            //   owner: org,
+            //   repo: fork_repo,
+            //   basehead: `${fork_repo}...${org}:${base_repo}:${base_branch}`,
+            // });
+            // Instead, get the sha of the commit on main and compare it to the fork
+            const {
+              data: {
+                sha: base_branch_sha,
+              },
+            } = await github.rest.repos.getCommit({
+              owner: org,
+              repo: base_repo,
+              ref: base_branch,
+            })
+            const {
+              data: compare,
+            } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: org,
+              repo: fork_repo,
+              basehead: `${fork_branch}...${base_branch_sha}`,
+            });
+            if (compare.status == 'identical') {
+              log(`${base_repo}:${base_branch} and ${fork_repo}:${fork_branch} are identical`);
+              core.summary.write();
+              return;
+            } else if (compare.status == 'behind') {
+              log(`⚠️ Warning: ${fork_repo}:${fork_branch} is behind ${base_repo}:${base_branch}: behind by ${compare.behind_by} commits`);
+              log(`No new commits on ${base_repo}:${base_branch}`);
+              core.summary.write();
+              return;
+            } else if (compare.status == 'diverged') {
+              log(`⚠️ Warning: ${base_repo}:${base_branch} and ${fork_repo}:${fork_branch} have diverged: ahead by ${compare.ahead_by} commits, behind by ${compare.behind_by} commits`);
+            } else if (compare.status == 'ahead') {
+              log(`${base_repo}:${base_branch} is ahead of ${fork_repo}:${fork_branch}: ahead by ${compare.ahead_by}`);
+            }
+            log(`${compare.ahead_by} new commits on ${base_repo}:${base_branch}`);
+            log('');
+
+            const {
+              data: open_prs,
+            } = await github.rest.pulls.list({
+              owner: org,
+              repo: fork_repo,
+              state: 'open',
+              head: `${org}:${base_branch}`,
+              base: fork_branch,
+            });
+            if (open_prs.length > 0) {
+              log("Found open PR:");
+              for (const pr of open_prs) {
+                console.log(`${pr.html_url}`);
+                core.summary.addLink(pr.html_url, pr.html_url);
+              }
+              core.summary.write();
+              return;
+            }
+
+            const {
+              data: {
+                html_url: pr_url,
+              },
+            } = await github.rest.pulls.create({
+              title: pr_title,
+              owner: org,
+              repo: fork_repo,
+              head: base_branch,
+              head_repo: `${org}/${base_repo}`,
+              base: fork_branch,
+            });
+            log(`Created new PR:`);
+            core.summary.addLink(pr_url, pr_url);
+            console.log(pr_url);
+            core.summary.write();

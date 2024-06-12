@@ -1,0 +1,32 @@
+name: Patch bastion
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0' # every sunday at midnight
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy_vpc:
+    environment: ${{ github.repository == 'mxnxpx-org/workflow-test-upstream' && 'btb' || github.repository == 'MxNxPx/workflow-test-fork' && 'prod' }}
+#    environment: ${{ github.repository == 'defenseunicorns/uds-infrastructure' && 'btb' || github.repository == 'defenseunicorns/uds-infrastructure-prod' && 'prod' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          environment: ${{ github.repository == 'mxnxpx-org/workflow-test-upstream' && 'btb' || github.repository == 'MxNxPx/workflow-test-fork' && 'prod' }}
+#          environment: ${{ github.repository == 'defenseunicorns/uds-infrastructure' && 'btb' || github.repository == 'defenseunicorns/uds-infrastructure-prod' && 'prod' }}
+          target: vpc
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}

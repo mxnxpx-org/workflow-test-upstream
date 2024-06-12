@@ -1,0 +1,120 @@
+# This reusable workflow checks changes for the environment
+name: Check Changes
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        description: "The name of the environment to check changes for"
+        required: true
+    outputs:
+      bootstrap_changes:
+        value: ${{ jobs.check_changes.outputs.bootstrap }}
+      vpc_changes:
+        value: ${{ jobs.check_changes.outputs.vpc }}
+      runner_changes:
+        value: ${{ jobs.check_changes.outputs.runner }}
+      irsa_changes:
+        value: ${{ jobs.check_changes.outputs.irsa }}
+      cluster_changes:
+        value: ${{ jobs.check_changes.outputs.cluster }}
+      swf_changes:
+        value: ${{ jobs.check_changes.outputs.swf }}
+      base_bundle_changes:
+        value: ${{ jobs.check_changes.outputs.base_bundle }}
+      swf_bundle_changes:
+        value: ${{ jobs.check_changes.outputs.swf_bundle }}
+      lfai_bundle_changes:
+        value: ${{ jobs.check_changes.outputs.lfai_bundle }}
+      build_image_changes:
+        value: ${{ jobs.check_changes.outputs.build_image }}
+
+jobs:
+  check_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      bootstrap: ${{ steps.changes.outputs.bootstrap }}
+      vpc: ${{ steps.changes.outputs.vpc }}
+      runner: ${{ steps.changes.outputs.runner }}
+      irsa: ${{ steps.changes.outputs.irsa }}
+      cluster: ${{ steps.changes.outputs.cluster }}
+      swf: ${{ steps.changes.outputs.swf }}
+      base_bundle: ${{ steps.changes.outputs.base_bundle }}
+      swf_bundle: ${{ steps.changes.outputs.swf_bundle }}
+      lfai_bundle: ${{ steps.changes.outputs.lfai_bundle }}
+      build_image: ${{ steps.changes.outputs.build_image }}
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Check paths
+        uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
+        id: changes
+        with:
+          # Diff against the last deployed (tagged) version of the environment
+          base: "${{ inputs.environment }}-latest"
+          filters: |
+            bootstrap:
+              - 'terraform/bootstrap/**'
+              - '.github/actions/terraform-*/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+            vpc:
+              - 'terraform/vpc/**'
+              - 'env/${{ inputs.environment }}/vpc.tfvars'
+              - '.github/actions/terraform-*/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+            runner:
+              - 'terraform/runner/**'
+              - 'env/${{ inputs.environment }}/runner.tfvars'
+              - '.github/actions/terraform-*/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+            irsa:
+              - 'terraform/irsa/**'
+              - 'env/${{ inputs.environment }}/irsa.tfvars'
+              - '.github/actions/terraform-*/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+            cluster:
+              - 'terraform/cluster/**'
+              - 'env/${{ inputs.environment }}/cluster.tfvars'
+              - '.github/actions/terraform-*/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+            swf:
+              - 'terraform/swf/**'
+              - 'modules/irsa-s3/**'
+              - 'modules/irsa-rdb/**'
+              - 'modules/irsa-elasticache/**'
+              - 'env/${{ inputs.environment }}/swf.tfvars'
+              - '.github/actions/terraform-*/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+            build_image:
+              - '.github/actions/build-and-publish-runner-image/*'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+            base_bundle:
+              - 'bundles/base/**'
+              - 'tasks/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+              - '.github/workflows/plan-bundle-callable.yaml'
+              - 'terraform/cluster/uds-config.tf'
+              - 'src/aws-lb-controller/**'
+            swf_bundle:
+              - 'bundles/swf/**'
+              - 'tasks/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+              - '.github/workflows/plan-bundle-callable.yaml'
+              - 'terraform/swf/uds-config.tf'
+              - 'src/swf-deps-aws/**'
+            lfai_bundle:
+              - 'bundles/lfai/**'
+              - 'tasks/**'
+              - '.github/workflows/deploy-environment-callable.yaml'
+              - '.github/workflows/plan-environment-callable.yaml'
+              - '.github/workflows/plan-bundle-callable.yaml'
+              - 'src/gpu-operator/**'

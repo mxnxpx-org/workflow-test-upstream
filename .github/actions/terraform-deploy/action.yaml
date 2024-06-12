@@ -1,0 +1,71 @@
+name: Terraform Deploy
+description: Runs an apply on the terraform.
+
+inputs:
+  environment:
+    description: Name of the environment to apply
+    required: true
+  target:
+    description: Target directory under terraform
+    required: true
+  repository:
+    description: Code Repository
+    required: true
+  region:
+    description: AWS region to deploy to
+    required: true
+  permissions_boundary:
+    description: ARN of the permissions boundary to apply to roles
+    required: true
+  state_bucket:
+    description: name of the S3 bucket to store state
+    required: true
+  lock_table:
+    description: name of the DynamoDB table to lock state
+    required: true
+  aws_govcloud_role_to_assume:
+    description: ARN of the role to assume
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS Credentials
+      run: |
+        echo "[*] Configure AWS Credentials"
+#      uses: aws-actions/configure-aws-credentials@v4
+#      with:
+#        role-to-assume: ${{ inputs.aws_govcloud_role_to_assume }}
+#        role-session-name: ${{ github.job || github.event.client_payload.pull_request.head.sha || github.sha  }}
+#        aws-region: ${{ inputs.region }}
+#        role-duration-seconds: 3600
+
+    - uses: opentofu/setup-opentofu@v1
+      with:
+        tofu_version: 1.6.2
+
+    - name: Run Tofu Apply
+      shell: bash
+#      working-directory: './terraform/${{ inputs.target }}/'
+      env:
+        TF_VAR_environment: ${{ inputs.environment }}
+        TF_VAR_repository: ${{ inputs.repository }}
+        TF_VAR_region: ${{ inputs.region }}
+        TF_VAR_permissions_boundary: ${{ inputs.permissions_boundary }}
+      run: |
+        echo "[*] Run Tofu Apply"
+        echo "inputs.environment: ${{ inputs.environment }}"
+        echo "inputs.repository: ${{ inputs.repository }}"
+        echo "inputs.region: ${{ inputs.region }}"
+        echo "inputs.permissions_boundary: ${{ inputs.permissions_boundary }}"
+#        tfargs=()
+#        # Use the environment + module specific var file if it exists
+#        if [[ -f "../../env/${{ inputs.environment }}/${{ inputs.target }}.tfvars" ]]; then
+#          tfargs+=(-var-file="../../env/${{ inputs.environment }}/${{ inputs.target }}.tfvars")
+#        fi
+#        tofu init \
+#          -backend-config="region=${{ inputs.region }}" \
+#          -backend-config="bucket=${{ inputs.state_bucket }}" \
+#          -backend-config="key=${{ inputs.environment }}/${{ inputs.target }}.tfstate" \
+#          -backend-config="dynamodb_table=${{ inputs.lock_table }}" ${tfargs[*]}
+#        tofu apply ${tfargs[*]} -auto-approve

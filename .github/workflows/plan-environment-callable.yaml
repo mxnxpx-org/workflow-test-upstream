@@ -1,0 +1,214 @@
+# This reusable workflow plans a given environment (IAC + Validate Bundle availability)
+name: Plan Environment
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        description: "The name of the environment to plan, GitHub environment used assumes `-readonly` suffix"
+        required: true
+
+jobs:
+  check_changes:
+    uses: ./.github/workflows/check-changes-callable.yaml
+    with:
+      environment: ${{ inputs.environment }}
+
+  bootstrap_checks:
+    needs: check_changes
+    if: needs.check_changes.outputs.bootstrap_changes == 'true'
+    environment: ${{ inputs.environment }}-readonly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/terraform-test
+        with:
+          # The BTB environment bootstrap uses a legacy name of "staging" to prevent state recreation
+          environment: "${{ inputs.environment == 'btb' && 'staging' || inputs.environment }}"
+          target: bootstrap
+          repository: ${{ github.repository }}
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+          read_only_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#          read_only_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+
+  vpc_checks:
+    needs:
+      - check_changes
+      - bootstrap_checks
+    if: ${{ ( !cancelled() ) && ( needs.bootstrap_checks.result == 'success' || needs.bootstrap_checks.result == 'skipped' ) && needs.check_changes.outputs.vpc_changes == 'true' }}
+    environment: ${{ inputs.environment }}-readonly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/terraform-test
+        with:
+          environment: ${{ inputs.environment }}
+          target: vpc
+          repository: ${{ github.repository }}
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+          read_only_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#          read_only_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+
+  irsa_checks:
+    needs:
+      - check_changes
+      - bootstrap_checks
+    if: ${{ ( !cancelled() ) && ( needs.bootstrap_checks.result == 'success' || needs.bootstrap_checks.result == 'skipped' ) && needs.check_changes.outputs.irsa_changes == 'true' }}
+    environment: ${{ inputs.environment }}-readonly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/terraform-test
+        with:
+          environment: ${{ inputs.environment }}
+          target: irsa
+          repository: ${{ github.repository }}
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+          read_only_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#          read_only_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+
+  cluster_checks:
+    needs:
+      - check_changes
+      - vpc_checks
+      - irsa_checks
+    if: ${{ ( !cancelled() ) && ( needs.vpc_checks.result == 'success' || needs.vpc_checks.result == 'skipped' ) && ( needs.irsa_checks.result == 'success' || needs.irsa_checks.result == 'skipped' ) && needs.check_changes.outputs.cluster_changes == 'true' }}
+    environment: ${{ inputs.environment }}-readonly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/terraform-test
+        with:
+          environment: ${{ inputs.environment }}
+          target: cluster
+          repository: ${{ github.repository }}
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+          read_only_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#          read_only_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+
+  # This plan is expected to return some diffs due to lack of secret access in the readonly environment
+  runner_checks:
+    needs:
+      - check_changes
+      - vpc_checks
+      - irsa_checks
+    if: ${{ ( !cancelled() ) && ( needs.vpc_checks.result == 'success' || needs.vpc_checks.result == 'skipped' ) && ( needs.irsa_checks.result == 'success' || needs.irsa_checks.result == 'skipped' ) && needs.check_changes.outputs.runner_changes == 'true' }}
+    environment: ${{ inputs.environment }}-readonly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/terraform-test
+        with:
+          environment: ${{ inputs.environment }}
+          target: runner
+          repository: ${{ github.repository }}
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+          read_only_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#          read_only_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#        env:
+#          TF_VAR_github_org_url: ${{ vars.UDS_GITHUB_ORG_URL }}
+#          TF_VAR_github_app_id: ${{ vars.UDS_GITHUB_APP_ID }}
+#          TF_VAR_github_app_installation_id: ${{ vars.UDS_GITHUB_APP_INSTALLATION_ID }}
+#          TF_VAR_github_app_private_key: ${{ secrets.UDS_GITHUB_APP_PRIVATE_KEY }}
+
+  swf_checks:
+    needs:
+      - check_changes
+      - cluster_checks
+    if: ${{ ( !cancelled() ) && ( needs.cluster_checks.result == 'success' || needs.cluster_checks.result == 'skipped' ) && needs.check_changes.outputs.swf_changes == 'true' }}
+    environment: ${{ inputs.environment }}-readonly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/terraform-test
+        with:
+          environment: ${{ inputs.environment }}
+          target: swf
+          repository: ${{ github.repository }}
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+          read_only_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#          read_only_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+
+  base_bundle_checks:
+    needs:
+      - check_changes
+      - cluster_checks
+      - swf_checks
+    if: |
+      ( !cancelled() ) &&
+      ( needs.cluster_checks.result == 'success' || needs.cluster_checks.result == 'skipped' ) &&
+      ( needs.swf_checks.result == 'success' || needs.swf_checks.result == 'skipped' ) &&
+      needs.check_changes.outputs.base_bundle_changes == 'true'
+    uses: ./.github/workflows/plan-bundle-callable.yaml
+    with:
+      bundle: base
+
+  swf_bundle_checks:
+    needs:
+      - check_changes
+      - cluster_checks
+      - swf_checks
+    if: |
+      ( !cancelled() ) &&
+      ( needs.cluster_checks.result == 'success' || needs.cluster_checks.result == 'skipped' ) &&
+      ( needs.swf_checks.result == 'success' || needs.swf_checks.result == 'skipped' ) &&
+      needs.check_changes.outputs.swf_bundle_changes == 'true'
+    uses: ./.github/workflows/plan-bundle-callable.yaml
+    with:
+      bundle: swf
+
+  lfai_bundle_checks:
+    needs:
+      - check_changes
+      - cluster_checks
+      - swf_checks
+    if: |
+      ( !cancelled() ) &&
+      ( needs.cluster_checks.result == 'success' || needs.cluster_checks.result == 'skipped' ) &&
+      ( needs.swf_checks.result == 'success' || needs.swf_checks.result == 'skipped' ) &&
+      needs.check_changes.outputs.lfai_bundle_changes == 'true'
+    uses: ./.github/workflows/plan-bundle-callable.yaml
+    with:
+      bundle: lfai

@@ -1,0 +1,469 @@
+name: Deploy Environment
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        description: "The name of the environment to deploy"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  check_changes:
+    uses: ./.github/workflows/check-changes-callable.yaml
+    with:
+      environment: ${{ inputs.environment }}
+
+  update_tag:
+    needs: check_changes
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Update environment marker tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ inputs.environment }}-latest"; then
+            gh release delete "${{ inputs.environment }}-latest" --cleanup-tag -y
+          fi
+          # generate new release
+          gh release create "${{ inputs.environment }}-latest" -t "${{ inputs.environment }}-latest" --notes "Latest ${{ inputs.environment }} Deployment"
+
+  deploy_bootstrap:
+    needs: check_changes
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.bootstrap_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          # The BTB environment bootstrap uses a legacy name of "staging" to prevent state recreation
+          environment: "${{ inputs.environment == 'btb' && 'staging' || inputs.environment }}"
+          target: bootstrap
+          repository: ${{ github.repository }}
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+
+  deploy_vpc:
+    needs:
+      - check_changes
+      - deploy_bootstrap
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.deploy_bootstrap.result == 'success' || needs.deploy_bootstrap.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.vpc_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: vpc
+          repository: ${{ github.repository }}
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+
+  deploy_irsa:
+    needs:
+      - check_changes
+      - deploy_bootstrap
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.deploy_bootstrap.result == 'success' || needs.deploy_bootstrap.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.irsa_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: irsa
+          repository: ${{ github.repository }}
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+
+  deploy_runner:
+    needs:
+      - check_changes
+      - deploy_vpc
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.deploy_vpc.result == 'success' || needs.deploy_vpc.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.runner_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: runner
+          repository: ${{ github.repository }}
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+#        env:
+#          TF_VAR_github_org_url: ${{ vars.ARC_RUNNER_GITHUB_APP_ORG_URL }}
+#          TF_VAR_github_app_id: ${{ vars.ARC_RUNNER_GITHUB_APP_APP_ID }}
+#          TF_VAR_github_app_installation_id: ${{ vars.ARC_RUNNER_GITHUB_APP_INSTALLATION_ID }}
+#          TF_VAR_github_app_private_key: ${{ secrets.ARC_RUNNER_GITHUB_APP_PRIVATE_KEY }}
+#          TF_VAR_github_runner_group: ${{ vars.ARC_RUNNER_RUNNER_GROUP }}
+
+  deploy_cluster:
+    needs:
+      - check_changes
+      - deploy_vpc
+      - deploy_irsa
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.deploy_vpc.result == 'success' || needs.deploy_vpc.result == 'skipped' ) &&
+      ( needs.deploy_irsa.result == 'success' || needs.deploy_irsa.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.cluster_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: cluster
+          repository: ${{ github.repository }}
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+
+  deploy_swf:
+    needs:
+      - check_changes
+      - deploy_cluster
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.deploy_cluster.result == 'success' || needs.deploy_cluster.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.swf_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: ./.github/actions/terraform-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: swf
+          repository: ${{ github.repository }}
+          aws_govcloud_role_to_assume: "secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME"
+          region: "vars.AWS_REGION"
+          permissions_boundary: "vars.PERMISSIONS_BOUNDARY"
+          state_bucket: "vars.STATE_BUCKET"
+          lock_table: "vars.LOCK_TABLE"
+#          aws_govcloud_role_to_assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          region: ${{ vars.AWS_REGION }}
+#          permissions_boundary: ${{ vars.PERMISSIONS_BOUNDARY }}
+#          state_bucket: ${{ vars.STATE_BUCKET }}
+#          lock_table: ${{ vars.LOCK_TABLE }}
+
+  build_and_publish_runner_image:
+    needs:
+      - check_changes
+    # Run this if there are changes to its dir or we need to deploy an image.
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.build_image_changes == 'true' ||
+      ( needs.check_changes.outputs.base_bundle_changes == 'true' ||
+        needs.check_changes.outputs.swf_bundle_changes == 'true' ||
+        needs.check_changes.outputs.lfai_bundle_changes == 'true' ) )
+    environment: ${{ inputs.environment }}
+    permissions:
+      packages: write
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    outputs:
+      runner_group: "ubuntu-latest"
+#      runner_group: ${{ vars.ARC_RUNNER_RUNNER_GROUP }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - uses: ./.github/actions/build-and-publish-runner-image
+        with:
+          version: ${{ github.sha }}
+          gh_user: ${{ github.actor }}
+          gh_password: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy_base_bundle:
+    needs:
+      - check_changes
+      - build_and_publish_runner_image
+      - deploy_cluster
+      - deploy_swf
+    if: |
+      ( !cancelled() ) &&
+      ( needs.check_changes.result == 'success' || needs.check_changes.result == 'skipped' ) &&
+      ( needs.build_and_publish_runner_image.result == 'success' || needs.build_and_publish_runner_image.result == 'skipped' ) &&
+      ( needs.deploy_cluster.result == 'success' || needs.deploy_cluster.result == 'skipped' ) &&
+      ( needs.deploy_swf.result == 'success' || needs.deploy_swf.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.base_bundle_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on:
+      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
+    container:
+      image: 'ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:latest'
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Configure AWS Credentials
+        run: |
+          echo "[*] Configure AWS Credentials"
+#        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+#        with:
+#          role-to-assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          role-session-name: ${{ github.job || github.event.client_payload.pull_request.head.sha || github.sha  }}
+#          aws-region: ${{ vars.AWS_REGION }}
+#          role-duration-seconds: 3600
+
+      - name: Environment setup
+        uses: ./.github/actions/setup
+
+      - name: Setup runner
+        shell: bash
+        run: |
+           echo "[*] Setup runner"
+           echo "inputs.environment: ${{ inputs.environment }}"
+#          uds run --no-progress setup-env
+#          uds run --no-progress setup-kubeconfig
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: GHCR Login
+        run: uds zarf tools registry login -u "dummy" -p "${{ secrets.GITHUB_TOKEN }}" ghcr.io
+
+      - name: Create the base bundle
+        shell: bash
+        run: |
+           echo "[*] Create the base bundle"
+#        run: uds run --no-progress create-base
+
+      - name: Deploy the base bundle
+        shell: bash
+        run: |
+           echo "[*] Deploy the base bundle"
+#        run: uds run --no-progress deploy-base
+#        env:
+#          # UDS_ variables are read in for bundle configuration
+#          UDS_ADMIN_TLS_CERT: ${{ secrets.UDS_ADMIN_TLS_CERT }}
+#          UDS_ADMIN_TLS_KEY: ${{ secrets.UDS_ADMIN_TLS_KEY }}
+#          UDS_TENANT_TLS_CERT: ${{ secrets.UDS_TENANT_TLS_CERT }}
+#          UDS_TENANT_TLS_KEY: ${{ secrets.UDS_TENANT_TLS_KEY }}
+#          UDS_DOMAIN: ${{ vars.UDS_DOMAIN }}
+#          UDS_REGION: ${{ vars.AWS_REGION }}
+#          UDS_GOOGLE_IDP_ENABLED: ${{ vars.GOOGLE_IDP_ENABLED }}
+#          UDS_GOOGLE_IDP_CLIENTID: ${{ vars.GOOGLE_IDP_CLIENTID }}
+#          UDS_GOOGLE_IDP_CLIENTSECRET: ${{ secrets.GOOGLE_IDP_CLIENTSECRET }}
+#          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: Debug Output
+        if: ${{ always() }}
+        uses: ./.github/actions/cluster-debug
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -${{ inputs.environment }}-base-bundle
+
+  deploy_swf_bundle:
+    needs:
+      - check_changes
+      - build_and_publish_runner_image
+      - deploy_base_bundle
+    if: |
+      ( !cancelled() ) &&
+      ( needs.deploy_base_bundle.result == 'success' || needs.deploy_base_bundle.result == 'skipped') &&
+      ( needs.build_and_publish_runner_image.result == 'success' || needs.build_and_publish_runner_image.result == 'skipped' ) &&
+      ( needs.check_changes.outputs.swf_bundle_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on:
+      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
+    container:
+      image: 'ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:latest'
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Configure AWS Credentials
+        run: |
+          echo "[*] Configure AWS Credentials"
+#        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+#        with:
+#          role-to-assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          role-session-name: ${{ github.job || github.event.client_payload.pull_request.head.sha || github.sha  }}
+#          aws-region: ${{ vars.AWS_REGION }}
+#          role-duration-seconds: 3600
+
+      - name: Environment setup
+        uses: ./.github/actions/setup
+
+      - name: Setup runner
+        shell: bash
+        run: |
+           echo "[*] Setup runner"
+           echo "inputs.environment: ${{ inputs.environment }}"
+#          uds run --no-progress setup-env
+#          uds run --no-progress setup-kubeconfig
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: GHCR Login
+        run: uds zarf tools registry login -u "dummy" -p "${{ secrets.GITHUB_TOKEN }}" ghcr.io
+
+      - name: Create the SWF bundle
+        shell: bash
+        run: |
+           echo "[*] Create the SWF bundle"
+#        run: uds run --no-progress create-swf
+
+      - name: Deploy the swf bundle
+        shell: bash
+        run: |
+           echo "[*] Deploy the swf bundle"
+#        run: uds run --no-progress deploy-swf
+#        env:
+#          UDS_DOMAIN: ${{ vars.UDS_DOMAIN }}
+#          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: Debug Output
+        if: ${{ always() }}
+        uses: ./.github/actions/cluster-debug
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -${{ inputs.environment }}-swf-bundle
+
+  deploy_lfai_bundle:
+    needs:
+      - check_changes
+      - build_and_publish_runner_image
+      - deploy_swf_bundle
+    if: |
+      ( !cancelled() ) &&
+      ( needs.build_and_publish_runner_image.result == 'success' || needs.build_and_publish_runner_image.result == 'skipped' ) &&
+      ( needs.deploy_swf_bundle.result == 'success' || needs.deploy_swf_bundle.result == 'skipped') &&
+      ( needs.check_changes.outputs.lfai_bundle_changes == 'true' )
+    environment: ${{ inputs.environment }}
+    runs-on:
+      group: ${{ needs.build_and_publish_runner_image.outputs.runner_group }}
+    container:
+      image: 'ghcr.io/defenseunicorns/arc/images/ubuntu-22_04:latest'
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Configure AWS Credentials
+#        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        run: |
+          echo "[*] Configure AWS Credentials"
+#        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+#        with:
+#          role-to-assume: ${{ secrets.AWS_GOVCLOUD_ROLE_TO_ASSUME }}
+#          role-session-name: ${{ github.job || github.event.client_payload.pull_request.head.sha || github.sha  }}
+#          aws-region: ${{ vars.AWS_REGION }}
+#          role-duration-seconds: 3600
+
+      - name: Environment setup
+        uses: ./.github/actions/setup
+
+      - name: Setup runner
+        shell: bash
+        run: |
+           echo "[*] Setup runner"
+           echo "inputs.environment: ${{ inputs.environment }}"
+#          uds run --no-progress setup-env
+#          uds run --no-progress setup-kubeconfig
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: GHCR Login
+        run: uds zarf tools registry login -u "dummy" -p "${{ secrets.GITHUB_TOKEN }}" ghcr.io
+
+      - name: Create the lfai bundle
+        shell: bash
+        run: |
+           echo "[*] Create the lfai bundle"
+#        run: uds run --no-progress create-lfai
+
+      - name: Deploy the lfai bundle
+        shell: bash
+        run: |
+           echo "[*] Deploy the lfai bundle"
+#        run: uds run --no-progress deploy-lfai
+#        env:
+#          UDS_DOMAIN: ${{ vars.UDS_DOMAIN }}
+#          UDS_SUPABASE_URL: https://supabase-kong.${{ vars.UDS_DOMAIN }}
+#          UDS_HOSTED_DOMAIN: ${{ vars.UDS_DOMAIN }}
+#          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: Debug Output
+        if: ${{ always() }}
+        uses: ./.github/actions/cluster-debug
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -${{ inputs.environment }}-lfai-bundle
