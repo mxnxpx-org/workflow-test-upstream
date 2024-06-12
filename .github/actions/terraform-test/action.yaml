@@ -41,6 +41,7 @@ runs:
         target: ${{ inputs.target }}
 
     - name: Configure AWS Credentials
+      shell: bash
       run: |
        echo "[*] Configure AWS Credentials"
        echo "inputs.region: ${{ inputs.region }}"
@@ -86,6 +87,7 @@ runs:
 #          tofu show -json terraform.plan > terraform.json
 
     - name: Generate Terraform Diff Report
+      shell: bash
       run: |
         echo "[*] Generate Terraform Diff Report"
         echo "inputs.target: ${{ inputs.target }}"
