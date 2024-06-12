@@ -8,6 +8,9 @@ on:
         description: "The name of the environment to plan, GitHub environment used assumes `-readonly` suffix"
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   check_changes:
     uses: ./.github/workflows/check-changes-callable.yaml
@@ -20,7 +23,7 @@ jobs:
     environment: ${{ inputs.environment }}-readonly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: ./.github/actions/terraform-test
         with:
           # The BTB environment bootstrap uses a legacy name of "staging" to prevent state recreation
@@ -46,7 +49,7 @@ jobs:
     environment: ${{ inputs.environment }}-readonly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: ./.github/actions/terraform-test
         with:
           environment: ${{ inputs.environment }}
@@ -71,7 +74,7 @@ jobs:
     environment: ${{ inputs.environment }}-readonly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: ./.github/actions/terraform-test
         with:
           environment: ${{ inputs.environment }}
@@ -97,7 +100,7 @@ jobs:
     environment: ${{ inputs.environment }}-readonly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: ./.github/actions/terraform-test
         with:
           environment: ${{ inputs.environment }}
@@ -124,7 +127,7 @@ jobs:
     environment: ${{ inputs.environment }}-readonly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: ./.github/actions/terraform-test
         with:
           environment: ${{ inputs.environment }}
@@ -154,7 +157,7 @@ jobs:
     environment: ${{ inputs.environment }}-readonly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: ./.github/actions/terraform-test
         with:
           environment: ${{ inputs.environment }}

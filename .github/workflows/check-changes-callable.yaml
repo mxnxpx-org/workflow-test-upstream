@@ -29,6 +29,9 @@ on:
       build_image_changes:
         value: ${{ jobs.check_changes.outputs.build_image }}
 
+permissions:
+  contents: read
+
 jobs:
   check_changes:
     runs-on: ubuntu-latest
